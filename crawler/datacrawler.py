@@ -20,16 +20,21 @@ class PracujPlSpider(scrapy.Spider):
         result = {
             'year': response.meta['year'],
             'month': response.meta['month'],
-            'title': re.sub('<[^>]+>', '', str(response.meta['job_title'])).strip(),
+            'title': re.sub('[\\s]+', ' ', re.sub('<[^>]+>', '', str(response.meta['job_title'])).strip()),
             'location': re.sub('<[^>]+>', '', str(response.meta['job_location'])).strip(),
             'content': re.sub('<[^>]+>', '', str(content)).strip(),
         }
         global data
-        data = data.append(pd.Series(result), ignore_index=True)
+        if result['content'] not in 'None':
+            data = data.append(pd.Series(result), ignore_index=True)
+            columns = ['year', 'month', 'title', 'location', 'content']
+            data[columns].to_csv(output_filename, sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
         yield {}  # result
 
     def parse(self, response):
+        # parsing single page of data
         list_item_selector = ".//div[@class='offers_item']"
+        page_number = 0
         for list_item in response.xpath(list_item_selector):
             details_page_link_selector = './/a/@href'
             job_title_selector = ".//div[@class='offers_item_link_cnt']/span"
@@ -43,21 +48,35 @@ class PracujPlSpider(scrapy.Spider):
             current_url = response.request.url
             request.meta['year'] = 0
             request.meta['month'] = 0
-            z = re.match(".*Year=([0-9]+)&Month=([0-9]+)&PageNumber.*", current_url)
+            z = re.match(".*Year=([0-9]+)&Month=([0-9]+)&PageNumber=([0-9]+).*", current_url)
             if z:
                 request.meta['year'] = z.group(1)
                 request.meta['month'] = z.group(2)
+                page_number = z.group(3)
             yield request
 
+        # save data to file after each page processed
+        print("Year: {0}, month: {1}, page_no: {2}".format(request.meta['year'], request.meta['month'], page_number))
+
+
+        # moving to next pages of data
         next_page_selector = ".//a[@class='offers_nav_next']/@href"
-        # self.job_title = ''
-        # self.job_location = ''
-        # next_page = response.xpath(next_page_selector).extract_first()
-        # if next_page:
-        #     yield scrapy.Request(
-        #         response.urljoin(next_page),
-        #         callback=self.parse
-        #     )
+        next_page = response.xpath(next_page_selector).extract_first()
+        if next_page: #and int(page_number) < 2:
+            yield scrapy.Request(
+                response.urljoin(next_page),
+                callback=self.parse
+            )
+
+        # jumping to next month in archive
+        next_month_selector = ".//a[@class='date_item_cnt_link']/@href"
+        next_months = response.xpath(next_month_selector).extract()
+        if next_months:
+            for next_month in next_months:
+                yield scrapy.Request(
+                    response.urljoin(next_month),
+                    callback=self.parse
+                )
 
 
 def main():
@@ -67,9 +86,6 @@ def main():
 
     process.crawl(PracujPlSpider)
     process.start()
-    print(data)
-    columns = ['year', 'month', 'title', 'location', 'content']
-    data[columns].to_csv(output_filename, sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
     print(data)
 
 
