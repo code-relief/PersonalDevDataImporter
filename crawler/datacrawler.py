@@ -4,7 +4,9 @@ import csv
 import os
 import pandas as pd
 from scrapy.crawler import CrawlerProcess
+import logging
 
+logger = logging.getLogger('datacrawler')
 data = pd.DataFrame()
 
 path = os.path.dirname(os.path.abspath(__file__))
@@ -13,6 +15,17 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 class PracujPlSpider(scrapy.Spider):
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
+
+    def __init__(self, *args, **kwargs):
+        http_error_logger = logging.getLogger('scrapy.spidermiddlewares.httperror')
+        http_error_logger.setLevel(logging.WARNING)
+        scrapy_core_logger = logging.getLogger('scrapy.core.scraper')
+        scrapy_engine_logger = logging.getLogger('scrapy.core.engine')
+        scrapy_downloader_logger = logging.getLogger('scrapy.downloadermiddlewares.redirect')
+        scrapy_core_logger.setLevel(logging.INFO)
+        scrapy_engine_logger.setLevel(logging.INFO)
+        scrapy_downloader_logger.setLevel(logging.INFO)
+        super().__init__(*args, **kwargs)
 
     def parse_single_page(self, response):
         content_selector = ".//div[@id='description']"
@@ -35,6 +48,7 @@ class PracujPlSpider(scrapy.Spider):
         # parsing single page of data
         list_item_selector = ".//div[@class='offers_item']"
         page_number = 0
+        request = {}
         for list_item in response.xpath(list_item_selector):
             details_page_link_selector = './/a/@href'
             job_title_selector = ".//div[@class='offers_item_link_cnt']/span"
@@ -56,13 +70,14 @@ class PracujPlSpider(scrapy.Spider):
             yield request
 
         # save data to file after each page processed
-        print("Year: {0}, month: {1}, page_no: {2}".format(request.meta['year'], request.meta['month'], page_number))
+        if type(request) is scrapy.http.request.Request:
+            logger.info("Year: {0}, month: {1}, page_no: {2}".format(request.meta['year'], request.meta['month'], page_number))
 
 
         # moving to next pages of data
         next_page_selector = ".//a[@class='offers_nav_next']/@href"
         next_page = response.xpath(next_page_selector).extract_first()
-        if next_page: #and int(page_number) < 2:
+        if next_page:# and int(page_number) < 2:
             yield scrapy.Request(
                 response.urljoin(next_page),
                 callback=self.parse
