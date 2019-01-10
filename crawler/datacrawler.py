@@ -15,6 +15,7 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 class PracujPlSpider(scrapy.Spider):
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
+    skip_months = ['Year=2015&Month=11&']
 
     def __init__(self, *args, **kwargs):
         http_error_logger = logging.getLogger('scrapy.spidermiddlewares.httperror')
@@ -40,8 +41,9 @@ class PracujPlSpider(scrapy.Spider):
         global data
         if result['content'] not in 'None':
             data = data.append(pd.Series(result), ignore_index=True)
-            columns = ['year', 'month', 'title', 'location', 'content']
-            data[columns].to_csv(output_filename, sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
+            if data.size % 1000 == 0:
+                columns = ['year', 'month', 'title', 'location', 'content']
+                data[columns].to_csv(output_filename.replace('.csv', '_{}.csv'.format(data.size)), sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
         yield {}  # result
 
     def parse(self, response):
@@ -49,45 +51,51 @@ class PracujPlSpider(scrapy.Spider):
         list_item_selector = ".//div[@class='offers_item']"
         page_number = 0
         request = {}
-        for list_item in response.xpath(list_item_selector):
-            details_page_link_selector = './/a/@href'
-            job_title_selector = ".//div[@class='offers_item_link_cnt']/span"
-            job_location_selector = ".//p[@class='offers_item_desc']/span[1]"
-            desc_page_link = list_item.xpath(details_page_link_selector).extract_first()
-            job_title = list_item.xpath(job_title_selector).extract_first()
-            job_location = list_item.xpath(job_location_selector).extract_first()
-            request = response.follow(desc_page_link, callback=self.parse_single_page)
-            request.meta['job_title'] = job_title
-            request.meta['job_location'] = job_location
-            current_url = response.request.url
-            request.meta['year'] = 0
-            request.meta['month'] = 0
-            z = re.match(".*Year=([0-9]+)&Month=([0-9]+)&PageNumber=([0-9]+).*", current_url)
-            if z:
-                request.meta['year'] = z.group(1)
-                request.meta['month'] = z.group(2)
-                page_number = z.group(3)
-            yield request
+        current_url = response.request.url
+        if not any(month in current_url for month in self.skip_months):
+            for list_item in response.xpath(list_item_selector):
+                details_page_link_selector = './/a/@href'
+                job_title_selector = ".//div[@class='offers_item_link_cnt']/span"
+                job_location_selector = ".//p[@class='offers_item_desc']/span[1]"
+                desc_page_link = list_item.xpath(details_page_link_selector).extract_first()
+                job_title = list_item.xpath(job_title_selector).extract_first()
+                job_location = list_item.xpath(job_location_selector).extract_first()
+                request = response.follow(desc_page_link, callback=self.parse_single_page)
+                request.meta['job_title'] = job_title
+                request.meta['job_location'] = job_location
+                request.meta['year'] = 0
+                request.meta['month'] = 0
+                z = re.match(".*Year=([0-9]+)&Month=([0-9]+)&PageNumber=([0-9]+).*", current_url)
+                if z:
+                    request.meta['year'] = z.group(1)
+                    request.meta['month'] = z.group(2)
+                    page_number = z.group(3)
+                yield request
 
-        # save data to file after each page processed
-        if type(request) is scrapy.http.request.Request:
-            logger.info("Year: {0}, month: {1}, page_no: {2}".format(request.meta['year'], request.meta['month'], page_number))
+            # save data to file after each page processed
+            if type(request) is scrapy.http.request.Request:
+                logger.info("Year: {0}, month: {1}, page_no: {2}".format(request.meta['year'], request.meta['month'], page_number))
 
 
-        # moving to next pages of data
-        next_page_selector = ".//a[@class='offers_nav_next']/@href"
-        next_page = response.xpath(next_page_selector).extract_first()
-        if next_page:# and int(page_number) < 2:
-            yield scrapy.Request(
-                response.urljoin(next_page),
-                callback=self.parse
-            )
+            # moving to next pages of data
+            next_page_selector = ".//a[@class='offers_nav_next']/@href"
+            next_page = response.xpath(next_page_selector).extract_first()
+            if next_page:# and int(page_number) < 2:
+                yield scrapy.Request(
+                    response.urljoin(next_page),
+                    callback=self.parse
+                )
+        else:
+            logger.info("Skipping {}".format(current_url))
 
         # jumping to next month in archive
         next_month_selector = ".//a[@class='date_item_cnt_link']/@href"
         next_months = response.xpath(next_month_selector).extract()
         if next_months:
             for next_month in next_months:
+                if any(month in next_month for month in self.skip_months):
+                    logger.info("Skipping {}".format(current_url))
+                    continue
                 yield scrapy.Request(
                     response.urljoin(next_month),
                     callback=self.parse
@@ -95,13 +103,18 @@ class PracujPlSpider(scrapy.Spider):
 
 
 def main():
-    process = CrawlerProcess({
-        'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36',
-    })
+    try:
+        process = CrawlerProcess({
+            'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.98 Safari/537.36',
+        })
 
-    process.crawl(PracujPlSpider)
-    process.start()
-    print(data)
+        process.crawl(PracujPlSpider)
+        process.start()
+    finally:
+        print("Finishing up")
+        columns = ['year', 'month', 'title', 'location', 'content']
+        data[columns].to_csv(output_filename, sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
+        print("Data saved to file")
 
 
 if __name__ == '__main__':
