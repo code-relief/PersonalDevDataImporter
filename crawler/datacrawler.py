@@ -15,7 +15,7 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 class PracujPlSpider(scrapy.Spider):
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
-    skip_months = ['Year=2015&Month=11&']
+    year_month_to_skip = [('2015', '9'), ('2015', '10'), ('2015', '11')]
 
     def __init__(self, *args, **kwargs):
         http_error_logger = logging.getLogger('scrapy.spidermiddlewares.httperror')
@@ -41,7 +41,7 @@ class PracujPlSpider(scrapy.Spider):
         global data
         if result['content'] not in 'None':
             data = data.append(pd.Series(result), ignore_index=True)
-            if data.size % 1000 == 0:
+            if data.size % 10000 == 0:
                 columns = ['year', 'month', 'title', 'location', 'content']
                 data[columns].to_csv(output_filename.replace('.csv', '_{}.csv'.format(data.size)), sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
         yield {}  # result
@@ -49,10 +49,17 @@ class PracujPlSpider(scrapy.Spider):
     def parse(self, response):
         # parsing single page of data
         list_item_selector = ".//div[@class='offers_item']"
-        page_number = 0
         request = {}
         current_url = response.request.url
-        if not any(month in current_url for month in self.skip_months):
+        z = re.match(".*Year=([0-9]+)&Month=([0-9]+)&PageNumber=([0-9]+).*", current_url)
+        year = 0
+        month = 0
+        page_number = 0
+        if z:
+            year = z.group(1)
+            month = z.group(2)
+            page_number = z.group(3)
+        if not (year, month) in self.year_month_to_skip:
             for list_item in response.xpath(list_item_selector):
                 details_page_link_selector = './/a/@href'
                 job_title_selector = ".//div[@class='offers_item_link_cnt']/span"
@@ -65,11 +72,8 @@ class PracujPlSpider(scrapy.Spider):
                 request.meta['job_location'] = job_location
                 request.meta['year'] = 0
                 request.meta['month'] = 0
-                z = re.match(".*Year=([0-9]+)&Month=([0-9]+)&PageNumber=([0-9]+).*", current_url)
-                if z:
-                    request.meta['year'] = z.group(1)
-                    request.meta['month'] = z.group(2)
-                    page_number = z.group(3)
+                request.meta['year'] = year
+                request.meta['month'] = month
                 yield request
 
             # save data to file after each page processed
@@ -86,15 +90,19 @@ class PracujPlSpider(scrapy.Spider):
                     callback=self.parse
                 )
         else:
-            logger.info("Skipping {}".format(current_url))
+            logger.info("Skipping [1] {}".format(current_url))
 
         # jumping to next month in archive
         next_month_selector = ".//a[@class='date_item_cnt_link']/@href"
         next_months = response.xpath(next_month_selector).extract()
         if next_months:
             for next_month in next_months:
-                if any(month in next_month for month in self.skip_months):
-                    logger.info("Skipping {}".format(current_url))
+                z = re.match(".*Year=([0-9]+)&Month=([0-9]+).*", next_month)
+                if z:
+                    year = z.group(1)
+                    month = z.group(2)
+                if (year, month) in self.year_month_to_skip:
+                    logger.info("Skipping [2] {}".format(next_month))
                     continue
                 yield scrapy.Request(
                     response.urljoin(next_month),
