@@ -99,12 +99,12 @@ if __name__ == "__main__":
                     logger.info("Done {0} out of {1}".format(str(i), str(data_length)))
         except LangDetectException:
             pass
-    print('corpus read')
-    pickle.dump(corpus, os.path.join(path, 'corpus_stemmed.pickle'))
+    logger.info('corpus read')
+    pickle.dump(corpus, os.path.join(path, 'corpus_stemmed_{}.pickle'.format(desired_lang)))
     subjects = applyPhrases(preprocess_txt(corpus, lang='pl'))
-    pickle.dump(subjects, os.path.join(path, 'phrases.pickle'))
+    pickle.dump(subjects, os.path.join(path, 'phrases_{}.pickle'.format(desired_lang)))
     dct = Dictionary(subjects)
-    print('phrases applied')
+    logger.info('phrases applied')
 
     subject_set = list(set([s[0] for s in subjects if len(s) == 1]))
     dfs = [dct.dfs[dct.token2id[s]] for s in subject_set]
