@@ -68,7 +68,7 @@ def preprocess_txt(corpus, lang='pl'):
 
 def clear_txt(txt):
     txt = txt.lower()
-    txt = re.sub('[\(\):;,\.\?\-_\{\}\*@\!\+]+', ' ', txt)
+    txt = re.sub('[\(\):;,\.\?\-_–\{\}\*@\!\+]+', ' ', txt)
     txt = re.sub('\s+', ' ', txt)
     return txt
 
@@ -78,7 +78,7 @@ if __name__ == "__main__":
     logger.info("Start")
     path = os.path.dirname(os.path.abspath(__file__))
     m = Morfeusz()
-    res = m.analyse("Idę")
+    res = m.analyse("naszego")
     res_stemmed = res[0][2][1]
     data = read_full_data()
     data_gen = data.iterrows()
@@ -92,11 +92,12 @@ if __name__ == "__main__":
         try:
             lang = detect(txt);
             if lang == desired_lang:
-                stem = [a[2][1] for a in m.analyse(txt)]
+                stem = [m.analyse(word)[0][2][1] for word in txt.split()]
+                # stem = [a[2][1][0] for a in m.analyse(txt)]
                 corpus.append(stem)
                 i += 1
-                if i%1000 == 0:
-                    logger.info("Done {0} out of {1}".format(str(i), str(data_length)))
+                if i%10000 == 0:
+                    logger.info("Done {0} out of {1} ({2}%)".format(str(i), str(data_length), str(round((i / data_length) * 100))))
         except LangDetectException:
             pass
     logger.info('corpus read')
