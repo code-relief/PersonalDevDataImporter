@@ -15,7 +15,7 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 class PracujPlSpider(scrapy.Spider):
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
-    year_month_to_skip = [('2015', '9'), ('2015', '10'), ('2015', '11')]
+    year_month_to_skip = [('2015', '9'), ('2015', '10'), ('2015', '11'), ('2015', '5'), ('2015', '7'), ('2015', '8'), ('2015', '12'), ('2016', '8')]
 
     def __init__(self, *args, **kwargs):
         http_error_logger = logging.getLogger('scrapy.spidermiddlewares.httperror')
@@ -41,7 +41,7 @@ class PracujPlSpider(scrapy.Spider):
         global data
         if result['content'] not in 'None':
             data = data.append(pd.Series(result), ignore_index=True)
-            if data.size % 10000 == 0:
+            if data.size % 100000 == 0:
                 columns = ['year', 'month', 'title', 'location', 'content']
                 data[columns].to_csv(output_filename.replace('.csv', '_{}.csv'.format(data.size)), sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
         yield {}  # result
