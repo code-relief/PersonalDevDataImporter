@@ -71,12 +71,24 @@ def clear_txt(txt):
     txt = re.sub('\s+', ' ', txt)
     return txt
 
+def filter_stopword_phrases(phrases_csv_file_path):
+    working_dir = create_working_dir()
+    phrases_data = pd.read_csv(phrases_csv_file_path, sep=';', encoding='utf-8', quotechar='"')
+    stopwords = get_stopwords()
+    phrases_data = phrases_data[phrases_data.apply(lambda x: x['Phrase'] not in stopwords, axis=1)]
+    phrases_data.sort_values(by=['DF'], ascending=False).to_csv(
+        os.path.join(path, working_dir, 'phrases_with_stats__no_stopwords.csv'),
+        sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
 
-def find_phrases_and_stats(path, use_stemmed_dataFrom_path=None, desired_lang='pl'):
+def create_working_dir():
     working_dir = 'text_mining__{}'.format(time.strftime('%Y_%m_%d__%H_%M_%S', time.localtime()))
 
     if not os.path.exists(os.path.join(path, working_dir)):
         os.makedirs(os.path.join(path, working_dir))
+    return os.path.join(path, working_dir)
+
+def find_phrases_and_stats(path, use_stemmed_dataFrom_path=None, desired_lang='pl'):
+    working_dir = create_working_dir()
     if use_stemmed_dataFrom_path is None:
         m = Morfeusz()
         data = read_full_data()
