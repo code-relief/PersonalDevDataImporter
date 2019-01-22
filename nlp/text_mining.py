@@ -19,6 +19,8 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 console.setFormatter(formatter)
 logger.addHandler(console)
 
+path = os.path.dirname(os.path.abspath(__file__))
+m = Morfeusz()
 
 def applyPhrases(corpus):
     # Build the bigram and trigram models
@@ -67,9 +69,10 @@ def read_full_data():
 
 def clear_txt(txt):
     txt = txt.lower()
-    txt = re.sub('[\(\):;,\.\?\-_–‒‘\{\}\*@\!\+0-9]+', ' ', txt)
+    txt = re.sub("[\(\):;,\.\?\-_–‒■‘'\{\}\*@\!\+0-9]+", ' ', txt)
     txt = re.sub('\s+', ' ', txt)
     return txt
+
 
 def filter_stopword_phrases(phrases_csv_file_path):
     working_dir = create_working_dir()
@@ -80,6 +83,7 @@ def filter_stopword_phrases(phrases_csv_file_path):
         os.path.join(path, working_dir, 'phrases_with_stats__no_stopwords.csv'),
         sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
 
+
 def create_working_dir():
     working_dir = 'text_mining__{}'.format(time.strftime('%Y_%m_%d__%H_%M_%S', time.localtime()))
 
@@ -87,8 +91,12 @@ def create_working_dir():
         os.makedirs(os.path.join(path, working_dir))
     return os.path.join(path, working_dir)
 
+
 def find_phrases_and_stats(path, use_stemmed_dataFrom_path=None, desired_lang='pl'):
     working_dir = create_working_dir()
+    error_words_pd = pd.read_csv(os.path.join(path, 'error_phrase_replacements.csv'), sep=';', encoding='utf-8',
+                                 quotechar='"')
+    error_words = dict(zip(error_words_pd['a'].values, error_words_pd['b'].values))
     if use_stemmed_dataFrom_path is None:
         m = Morfeusz()
         data = read_full_data()
@@ -103,6 +111,7 @@ def find_phrases_and_stats(path, use_stemmed_dataFrom_path=None, desired_lang='p
             try:
                 lang = detect(txt);
                 if lang == desired_lang and len(txt) > 100:
+                    txt = ' '.join([word if word not in error_words else error_words[word] for word in txt.split()])
                     stem = [m.analyse(word)[0][2][1] for word in txt.split()]
                     # stem = [a[2][1][0] for a in m.analyse(txt)]
                     corpus.append(stem)
@@ -145,12 +154,46 @@ def find_phrases_and_stats(path, use_stemmed_dataFrom_path=None, desired_lang='p
     return working_dir
 
 
-if __name__ == "__main__":
+def fix_broken_phrases():
     m = Morfeusz()
-    info = m.analyse('bit')
+    info = m.analyse('bittttt')
+
+    test = m.analyse('prawidłowościzarządzenie')[0][2][2]
+    phrases_csv_file_path = os.path.join(path, 'phrases_with_stats_45697_pl.csv')
+    # phrases_csv_file_path = os.path.join(path, 'phrases_test.csv')
+    phrases_data = pd.read_csv(phrases_csv_file_path, sep=';', encoding='utf-8', quotechar='"')
+    phrases_data = set(phrases_data[phrases_data.apply(
+        lambda x: x['Word_count'] == 1 and isinstance(x['Phrase'], str) and len(x['Phrase']) > 0 and
+                  m.analyse(x['Phrase'])[0][2][2] == 'ign', axis=1)]['Phrase'].values)
+    replacements = {}
+    for error_phrase in phrases_data:
+        replacements[error_phrase] = error_phrase
+        found = False
+        for i in range(1, len(error_phrase)):
+            a = error_phrase[0:i]
+            b = error_phrase[i:]
+            if m.analyse(a)[0][2][2] != 'ign' and m.analyse(b)[0][2][2] != 'ign':
+                replacements[error_phrase] = ' '.join((a, b))
+                found = True
+        if not found:
+            for i in range(1, len(error_phrase)):
+                a = error_phrase[0:i]
+                b = error_phrase[i:]
+                if m.analyse(b)[0][2][2] != 'ign':
+                    replacements[error_phrase] = ' '.join((a, b))
+                    break
+
+    replacements_pd = pd.DataFrame(list(zip(list(replacements.keys()), list(replacements.values()))),
+                                   columns=['a', 'b'])
+    replacements_pd.to_csv(os.path.join(path, 'error_phrase_replacements.csv'), sep=';',
+                           encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
+
+
+if __name__ == "__main__":
     # https://github.com/nikita-moor/morfeusz-wrapper
     logger.info("START")
     path = os.path.dirname(os.path.abspath(__file__))
-    working_dir = find_phrases_and_stats(path, use_stemmed_dataFrom_path=os.path.join(path, 'text_mining__2019_01_16__19_39_36', 'full_data_with_stem_column.csv'))
+    working_dir = find_phrases_and_stats(path)
+    # working_dir = find_phrases_and_stats(path, use_stemmed_dataFrom_path=os.path.join(path, 'text_mining__2019_01_16__19_39_36', 'full_data_with_stem_column.csv'))
     logger.info("Data saved in '{}'".format(working_dir))
     logger.info("DONE")
