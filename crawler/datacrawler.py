@@ -6,7 +6,7 @@ import pandas as pd
 from scrapy.crawler import CrawlerProcess
 import logging
 import json
-import binascii
+import time
 
 logger = logging.getLogger('datacrawler')
 data = pd.DataFrame()
@@ -16,10 +16,10 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 
 
 class PracujPlSpider(scrapy.Spider):
+    batch_size = 200000
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
-    year_month_to_skip = [('2015', '9'), ('2015', '10'), ('2015', '11'), ('2015', '5'), ('2015', '7'), ('2015', '8'),
-                          ('2015', '12'), ('2016', '8')]
+    year_month_to_skip = []
     replacements = {'&#260;': 'Ą', '&#261;': 'ą', '&#262;': 'Ć', '&#263;': 'ć', '&#280;': 'Ę', '&#281;': 'ę',
                     '&#321;': 'Ł', '&#322;': 'ł', '&#323;': 'Ń', '&#324;': 'ń', '&#211;': 'Ó', '&#243;': 'ó',
                     '&#$3;': 'ó', '&#346;': 'Ś', '&#347;': 'ś', '&#377;': 'Ź', '&#378;': 'ź', '&#379;': 'Ż',
@@ -49,11 +49,14 @@ class PracujPlSpider(scrapy.Spider):
         global data
         if result['content'] not in 'None':
             data = data.append(pd.Series(result), ignore_index=True)
-            if data.size % 1000 == 0:
+            if data.size % self.batch_size == 0:
                 columns = result.keys()
                 columns = ['offerData_id', 'offerData_commonOfferId', 'offerData_jobTitle', 'offerData_categoryNames', 'offerData_countryName', 'offerData_regionName', 'offerData_appType', 'offerData_appUrl', 'offerData_recommendations', 'gtmData_name', 'gtmData_id', 'gtmData_price', 'gtmData_brand', 'gtmData_category', 'gtmData_variant', 'gtmData_list', 'gtmData_position', 'gtmData_dimension6', 'gtmData_dimension7', 'gtmData_dimension8', 'gtmData_dimension9', 'gtmData_dimension10', 'socProduct_identifier', 'socProduct_fn', 'socProduct_category', 'socProduct_description', 'socProduct_brand', 'socProduct_price', 'socProduct_amount', 'socProduct_currency', 'socProduct_url', 'socProduct_valid', 'socProduct_photo', 'dataLayer_level', 'dataLayer_ekosystem', 'dataLayer_receiver', 'year', 'month', 'title', 'location', 'content']
-                data[columns].to_csv(output_filename.replace('.csv', '_{}.csv'.format(data.size)), sep=';',
+                data[columns].to_csv(output_filename.replace('.csv', '_{0}_{1}_{2}.csv'.format(self.batch_size, data.size, time.strftime('%Y_%m_%d__%H_%M_%S', time.localtime()))), sep=';',
                                      encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
+                # clean in-memory data
+                logger.info("Data dumped to file")
+                data = pd.DataFrame()
         yield {}  # result
 
     def parse(self, response):
@@ -138,6 +141,7 @@ class PracujPlSpider(scrapy.Spider):
 
     def extract_json_data(self, regex, response_body, result, prefix):
         data = re.findall(regex, response_body, re.DOTALL)
+        json_data = None
         if data:
             json_string = data[0]
             keys = re.findall("([\w]+):", json_string)

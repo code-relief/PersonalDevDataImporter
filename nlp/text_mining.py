@@ -10,6 +10,7 @@ from langdetect import detect
 from langdetect.detector import LangDetectException
 import logging
 from stopwords import get_stopwords
+from sqlalchemy import create_engine
 
 logger = logging.getLogger('text_mining')
 logger.setLevel(logging.INFO)
@@ -65,6 +66,18 @@ def read_full_data():
                     pd.read_csv(os.path.join(path, 'data', file), sep=';', encoding='utf-8', quotechar='"'))
     data = pd.concat(data_frames, ignore_index=True)
     return data
+
+def move_csv_to_db():
+    root_path = os.path.dirname(os.path.abspath(__file__))
+    db_file = os.path.abspath(os.path.join(root_path, '..', 'data', 'personaldev.sqlite'))
+    engine = create_engine('sqlite:///' + db_file, echo=False)
+    is_first = True
+    for dirpath, dnames, fnames in os.walk(os.path.join(root_path, 'data')):
+        for file in fnames:
+            if file.endswith(".csv"):
+                data_pd = pd.read_csv(os.path.join(path, 'data', file), sep=';', encoding='utf-8', quotechar='"')
+                data_pd.to_sql('pracujpl', con=engine, if_exists='replace' if is_first else 'append', index_label='id')
+                logger.info("DB count: " + str(engine.execute("SELECT count(*) FROM pracujpl").fetchone()[0]))
 
 
 def clear_txt(txt):
@@ -192,8 +205,9 @@ def fix_broken_phrases():
 if __name__ == "__main__":
     # https://github.com/nikita-moor/morfeusz-wrapper
     logger.info("START")
-    path = os.path.dirname(os.path.abspath(__file__))
-    working_dir = find_phrases_and_stats(path)
-    # working_dir = find_phrases_and_stats(path, use_stemmed_dataFrom_path=os.path.join(path, 'text_mining__2019_01_16__19_39_36', 'full_data_with_stem_column.csv'))
-    logger.info("Data saved in '{}'".format(working_dir))
+    move_csv_to_db()
+    # path = os.path.dirname(os.path.abspath(__file__))
+    # working_dir = find_phrases_and_stats(path)
+    # # working_dir = find_phrases_and_stats(path, use_stemmed_dataFrom_path=os.path.join(path, 'text_mining__2019_01_16__19_39_36', 'full_data_with_stem_column.csv'))
+    # logger.info("Data saved in '{}'".format(working_dir))
     logger.info("DONE")
