@@ -78,6 +78,7 @@ def move_csv_to_db():
                 data_pd = pd.read_csv(os.path.join(path, 'data', file), sep=';', encoding='utf-8', quotechar='"')
                 data_pd.to_sql('pracujpl', con=engine, if_exists='replace' if is_first else 'append', index_label='id')
                 logger.info("DB count: " + str(engine.execute("SELECT count(*) FROM pracujpl").fetchone()[0]))
+                is_first = False
 
 
 def clear_txt(txt):

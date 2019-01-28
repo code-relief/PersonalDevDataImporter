@@ -17,7 +17,7 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 
 
 class PracujPlSpider(scrapy.Spider):
-    batch_size = 50000
+    batch_size = 10000
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
     replacements = {'&#260;': 'Ą', '&#261;': 'ą', '&#262;': 'Ć', '&#263;': 'ć', '&#280;': 'Ę', '&#281;': 'ę',
@@ -60,7 +60,7 @@ class PracujPlSpider(scrapy.Spider):
             if len(data) % self.batch_size == 0:
                 columns = result.keys()
                 columns = ['offerData_id', 'offerData_commonOfferId', 'offerData_jobTitle', 'offerData_categoryNames', 'offerData_countryName', 'offerData_regionName', 'offerData_appType', 'offerData_appUrl', 'offerData_recommendations', 'gtmData_name', 'gtmData_id', 'gtmData_price', 'gtmData_brand', 'gtmData_category', 'gtmData_variant', 'gtmData_list', 'gtmData_position', 'gtmData_dimension6', 'gtmData_dimension7', 'gtmData_dimension8', 'gtmData_dimension9', 'gtmData_dimension10', 'socProduct_identifier', 'socProduct_fn', 'socProduct_category', 'socProduct_description', 'socProduct_brand', 'socProduct_price', 'socProduct_amount', 'socProduct_currency', 'socProduct_url', 'socProduct_valid', 'socProduct_photo', 'dataLayer_level', 'dataLayer_ekosystem', 'dataLayer_receiver', 'year', 'month', 'title', 'location', 'content']
-                data[columns].to_csv(output_filename.replace('.csv', '_{0}_{1}_{2}.csv'.format(self.batch_size, data.size, time.strftime('%Y_%m_%d__%H_%M_%S', time.localtime()))), sep=';',
+                data[columns].to_csv(output_filename.replace('.csv', '_{0}_{1}.csv'.format(self.batch_size, time.strftime('%Y_%m_%d__%H_%M_%S', time.localtime()))), sep=';',
                                      encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
                 # clean in-memory data
                 logger.info("Data dumped to file")
