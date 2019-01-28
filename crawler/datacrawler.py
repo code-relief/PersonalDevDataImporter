@@ -7,6 +7,7 @@ from scrapy.crawler import CrawlerProcess
 import logging
 import json
 import time
+from sqlalchemy import create_engine
 
 logger = logging.getLogger('datacrawler')
 data = pd.DataFrame()
@@ -16,10 +17,9 @@ output_filename = os.path.join(path, 'pracujpl_data.csv')
 
 
 class PracujPlSpider(scrapy.Spider):
-    batch_size = 200000
+    batch_size = 50000
     name = "pracuj.pl_spider"
     start_urls = ['https://archiwum.pracuj.pl/archive/offers?Year=2015&Month=1&PageNumber=1']
-    year_month_to_skip = []
     replacements = {'&#260;': 'Ą', '&#261;': 'ą', '&#262;': 'Ć', '&#263;': 'ć', '&#280;': 'Ę', '&#281;': 'ę',
                     '&#321;': 'Ł', '&#322;': 'ł', '&#323;': 'Ń', '&#324;': 'ń', '&#211;': 'Ó', '&#243;': 'ó',
                     '&#$3;': 'ó', '&#346;': 'Ś', '&#347;': 'ś', '&#377;': 'Ź', '&#378;': 'ź', '&#379;': 'Ż',
@@ -35,6 +35,12 @@ class PracujPlSpider(scrapy.Spider):
         scrapy_core_logger.setLevel(logging.INFO)
         scrapy_engine_logger.setLevel(logging.INFO)
         scrapy_downloader_logger.setLevel(logging.INFO)
+
+        root_path = os.path.dirname(os.path.abspath(__file__))
+        db_file = os.path.abspath(os.path.join(root_path, '..', 'data', 'personaldev.sqlite'))
+        engine = create_engine('sqlite:///' + db_file, echo=False)
+        self.year_month_to_skip = engine.execute("SELECT year, month FROM pracujpl group by year, month having count(*) > 20000").fetchall()
+
         super().__init__(*args, **kwargs)
 
     def parse_single_page(self, response):
@@ -49,7 +55,9 @@ class PracujPlSpider(scrapy.Spider):
         global data
         if result['content'] not in 'None':
             data = data.append(pd.Series(result), ignore_index=True)
-            if data.size % self.batch_size == 0:
+            if len(data) % 1000 == 0:
+                logger.info("Crawled {0}/{1} so far ...".format(len(data), self.batch_size))
+            if len(data) % self.batch_size == 0:
                 columns = result.keys()
                 columns = ['offerData_id', 'offerData_commonOfferId', 'offerData_jobTitle', 'offerData_categoryNames', 'offerData_countryName', 'offerData_regionName', 'offerData_appType', 'offerData_appUrl', 'offerData_recommendations', 'gtmData_name', 'gtmData_id', 'gtmData_price', 'gtmData_brand', 'gtmData_category', 'gtmData_variant', 'gtmData_list', 'gtmData_position', 'gtmData_dimension6', 'gtmData_dimension7', 'gtmData_dimension8', 'gtmData_dimension9', 'gtmData_dimension10', 'socProduct_identifier', 'socProduct_fn', 'socProduct_category', 'socProduct_description', 'socProduct_brand', 'socProduct_price', 'socProduct_amount', 'socProduct_currency', 'socProduct_url', 'socProduct_valid', 'socProduct_photo', 'dataLayer_level', 'dataLayer_ekosystem', 'dataLayer_receiver', 'year', 'month', 'title', 'location', 'content']
                 data[columns].to_csv(output_filename.replace('.csv', '_{0}_{1}_{2}.csv'.format(self.batch_size, data.size, time.strftime('%Y_%m_%d__%H_%M_%S', time.localtime()))), sep=';',
@@ -72,7 +80,7 @@ class PracujPlSpider(scrapy.Spider):
             year = z.group(1)
             month = z.group(2)
             page_number = z.group(3)
-        if not (year, month) in self.year_month_to_skip:
+        if not (int(year), int(month)) in self.year_month_to_skip:
             for list_item in response.xpath(list_item_selector):
                 details_page_link_selector = './/a/@href'
                 job_title_selector = ".//div[@class='offers_item_link_cnt']/span"
@@ -83,8 +91,6 @@ class PracujPlSpider(scrapy.Spider):
                 request = response.follow(desc_page_link, callback=self.parse_single_page)
                 request.meta['job_title'] = job_title
                 request.meta['job_location'] = job_location
-                request.meta['year'] = 0
-                request.meta['month'] = 0
                 request.meta['year'] = year
                 request.meta['month'] = month
                 yield request
@@ -114,7 +120,7 @@ class PracujPlSpider(scrapy.Spider):
                 if z:
                     year = z.group(1)
                     month = z.group(2)
-                if (year, month) in self.year_month_to_skip:
+                if (int(year), int(month)) in self.year_month_to_skip:
                     logger.info("Skipping [2] {}".format(next_month))
                     continue
                 yield scrapy.Request(
