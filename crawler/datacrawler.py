@@ -200,7 +200,7 @@ def main():
         process.start()
     finally:
         print("Finishing up")
-        columns = ['year', 'month', 'title', 'location', 'content']
+        columns = ['offerData_id', 'offerData_commonOfferId', 'offerData_jobTitle', 'offerData_categoryNames', 'offerData_countryName', 'offerData_regionName', 'offerData_appType', 'offerData_appUrl', 'offerData_recommendations', 'gtmData_name', 'gtmData_id', 'gtmData_price', 'gtmData_brand', 'gtmData_category', 'gtmData_variant', 'gtmData_list', 'gtmData_position', 'gtmData_dimension6', 'gtmData_dimension7', 'gtmData_dimension8', 'gtmData_dimension9', 'gtmData_dimension10', 'socProduct_identifier', 'socProduct_fn', 'socProduct_category', 'socProduct_description', 'socProduct_brand', 'socProduct_price', 'socProduct_amount', 'socProduct_currency', 'socProduct_url', 'socProduct_valid', 'socProduct_photo', 'dataLayer_level', 'dataLayer_ekosystem', 'dataLayer_receiver', 'year', 'month', 'title', 'location', 'content']
         data[columns].to_csv(output_filename, sep=';', encoding='utf-8', mode='w', quotechar='"', line_terminator='\n')
         print("Data saved to file")
 
