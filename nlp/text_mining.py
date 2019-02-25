@@ -6,6 +6,7 @@ import time
 from gensim.corpora import Dictionary
 from gensim.models import TfidfModel
 from gensim.models import LdaModel
+from gensim.models import Word2Vec
 import pandas as pd
 from morfeusz2 import Morfeusz
 from langdetect import detect
@@ -20,7 +21,8 @@ from gensim.summarization.summarizer import summarize
 import pyLDAvis
 import pyLDAvis.gensim  # don't skip this
 import matplotlib.pyplot as plt
-
+import numpy as np
+from sklearn.manifold import TSNE
 # %matplotlib inline
 
 logger = logging.getLogger('text_mining')
@@ -113,7 +115,7 @@ def preprocess_corpus_and_find_phrases_and_stats(preprocess_content=True, desire
         m = Morfeusz()
         engine = create_sqlite_engine()
         data = engine.execute(
-            "SELECT id, content FROM pracujpl WHERE content_fixed is null and lang is null").fetchall()
+            "SELECT id, content FROM pracujpl WHERE content is not null and lang='pl'").fetchall()
         logger.info("Data read")
         i = 0
         data_length = len(data)
@@ -130,9 +132,10 @@ def preprocess_corpus_and_find_phrases_and_stats(preprocess_content=True, desire
                     repl_size = len(error_phrase_replacements.keys())
                     stem = [extract_stem(m.analyse(word), m, error_phrase_replacements) for word in txt.split()]
                     if repl_size < len(error_phrase_replacements.keys()):
-                        txt = ' '.join(
-                            [word if word not in error_phrase_replacements else error_phrase_replacements[word] for word
-                             in txt.split()])
+                        txt = [word if word not in error_phrase_replacements else error_phrase_replacements[word] for word
+                             in txt.split()]
+                        stem = [extract_stem(m.analyse(word), m, error_phrase_replacements) for word in txt]
+                        txt = ' '.join(txt)
                     i += 1
                     if i % 10000 == 0:
                         logger.info("Done {0} out of {1} ({2}%)".format(str(i), str(data_length),
@@ -175,6 +178,21 @@ def preprocess_corpus_and_find_phrases_and_stats(preprocess_content=True, desire
                               columns=['phrase', 'pos_element', 'pos_annotation', 'word_count', 'global_df'])
     phrases_pd.to_sql('pracujpl_phrases', con=engine, if_exists='replace', index_label='id')
 
+def detect_and_save_phrases():
+    engine = create_sqlite_engine()
+    data = engine.execute(
+        "SELECT id, stem FROM pracujpl WHERE stem is not null and lang='pl'").fetchall()
+    logger.info("Data read")
+    logger.info("Transforming texts start")
+    ids, corpus = zip(*data)
+    corpus = [doc.split() for doc in corpus]
+    logger.info("Transforming texts DONE")
+    logger.info('Applying phrases')
+    phrases = applyPhrases(corpus)
+    logger.info('Phrases applied')
+    update_data = zip(ids, phrases)
+    for id, phrase in update_data:
+        engine.execute("UPDATE pracujpl SET stem_phrases='{0}' where id={1}".format(' '.join(phrase), str(id)))
 
 def extract_main_job_titles():
     engine = create_sqlite_engine()
@@ -252,7 +270,7 @@ def perform_topic_modelling():
     sql_salles = "select ppl.stem from pracujpl ppl where offerData_jobTitle LIKE '%sprzedawca%' and ppl.stem is not null"
     sql_drivers = "select ppl.stem from pracujpl ppl where offerData_jobTitle LIKE '%kierowca międzynarodowy%' and ppl.stem is not null"
     engine = create_sqlite_engine()
-    corpus = engine.execute(sql_drivers).fetchall()
+    corpus = engine.execute(sql_programming).fetchall()
     logger.info("Data read. Corpus size: {}".format(len(corpus)))
     corpus = [txt[0].split() for txt in corpus]
     corpus = applyPhrases(corpus)
@@ -321,7 +339,8 @@ def pick_most_important_phrases_using_tfidf(topn=10):
     model = TfidfModel(corpus_bow, id2word=dict)  # fit model
     corpus_tfidf = model[corpus_bow]
 
-    tfidf_data = [[dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:topn]] for doc_tfids in corpus_tfidf]
+    tfidf_data = [[dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:topn]]
+                  for doc_tfids in corpus_tfidf]
     tfidf_data_dict = Dictionary(tfidf_data)
     top_words_set = list(set([top_word for doc_top in tfidf_data for top_word in doc_top]))
     top_word_df = [tfidf_data_dict.dfs[tfidf_data_dict.token2id[s]] for s in top_words_set]
@@ -330,49 +349,164 @@ def pick_most_important_phrases_using_tfidf(topn=10):
     print(sorted(top_word_stats, key=lambda tup: tup[1], reverse=True))
     print("Most important words per doc:")
     # for doc_tfids in corpus_tfidf:
-        # print([dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:topn]])
+    # print([dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:topn]])
 
 
-def detect_keywords_using_textrank_summarozation():
-    sql_programming = "select ppl.stem from pracujpl ppl inner join job_titles jt on jt.pos_annotation='nazwa języka programowania' and ppl.offerData_jobTitle LIKE '%'||jt.job_title||'%' where ppl.stem is not null"
-    sql_salles = "select ppl.stem from pracujpl ppl where offerData_jobTitle LIKE '%sprzedawca%' and ppl.stem is not null"
-    sql_drivers = "select ppl.stem from pracujpl ppl where offerData_jobTitle LIKE '%kierowca międzynarodowy%' and ppl.stem is not null"
+def detect_keywords():
+    sql_programming = "select ppl.stem_phrases from pracujpl ppl inner join job_titles jt on jt.pos_annotation='nazwa języka programowania' and ppl.offerData_jobTitle LIKE '%'||jt.job_title||'%' where ppl.stem_phrases is not null"
+    sql_salles = "select ppl.stem_phrases from pracujpl ppl where offerData_jobTitle LIKE '%sprzedawca%' and ppl.stem_phrases is not null"
+    sql_sales_representative = "select ppl.stem_phrases from pracujpl ppl where (offerData_jobTitle like '%handlowy%' or offerData_jobTitle like '%handlowiec%') and ppl.stem_phrases is not null"
+    sql_drivers = "select ppl.stem_phrases from pracujpl ppl where offerData_jobTitle LIKE '%kierowca międzynarodowy%' and ppl.stem_phrases is not null"
     engine = create_sqlite_engine()
-    corpus = engine.execute(sql_salles).fetchall()
+    corpus = engine.execute(sql_sales_representative).fetchall()
     logger.info("Data read. Corpus size: {}".format(len(corpus)))
     corpus = [txt[0].split() for txt in corpus]
-    corpus = applyPhrases(corpus)
-    logger.info("Phrases applied")
     stopwords = get_stopwords()
     corpus = [[word for word in doc if word not in stopwords] for doc in corpus]
     logger.info("Stopwords removed")
     logger.info("Detecting keywords")
-    keyword_data = [keywords(' '.join(doc)).split('\n') for doc in corpus]
+    logger.info("---TextRank")
+    keyword_data_textrank = extract_keywords(corpus, mode='textrank')
+    logger.info("---TFiDF")
+    keyword_data_tfidf = extract_keywords(corpus, mode='tfidf', tfidf_topn=20)
+    word_sets = []
+    top_words = set()
 
-    keyword_data_dict = Dictionary(keyword_data)
-    top_words_set = list(set([top_word for doc_top in keyword_data for top_word in doc_top]))
-    top_word_df = [keyword_data_dict.dfs[keyword_data_dict.token2id[s]] for s in top_words_set]
-    pos_data = [extract_pos(word.split()) for word in top_words_set]
-    pos_elements, pos_annotations = zip(*pos_data)
+    for keyword_data, name in [(keyword_data_textrank, 'TextRank'), (keyword_data_tfidf, 'TFiDF')]:
+        logger.info("Calculating stats [{}]".format(name))
+        keyword_data_dict = Dictionary(keyword_data)
+        top_words_set = list(set([top_word for doc_top in keyword_data for top_word in doc_top]))
+        if len(word_sets) > 0:
+            logger.info("Removing duplicates [{}]".format(name))
+            top_words_set = [word for word in top_words_set if word not in word_sets[len(word_sets) - 1]]
+            logger.info("After duplicates removal: {0}, [{1}]".format(len(top_words_set), name))
+            if len(top_words_set) == 0:
+                logger.info("Keyword dictionary is empty, skipping [{}]".format(name))
+                continue
+        word_sets.append(top_words_set)
+        top_word_df = [keyword_data_dict.dfs[keyword_data_dict.token2id[s]] for s in top_words_set]
+        # logger.info("Adding POS data [{}]".format(name))
+        # pos_data = [extract_pos(word.split()) for word in top_words_set]
+        # pos_elements, pos_annotations = zip(*pos_data)
 
-    top_word_stats = zip(top_words_set, top_word_df, pos_elements)
-    print("Most important words total:")
-    top_word_stats = sorted(top_word_stats, key=lambda tup: tup[1], reverse=True)
-    top_words_pd = pd.DataFrame(top_word_stats, columns=['keyword', 'df', 'pos'])
-    top_word_groups = [', '.join(similar_words) for similar_words in top_words_pd.groupby('pos')['keyword'].apply(list)]
-    for group in top_word_groups:
-        print(group)
+        top_word_stats = zip(top_words_set, top_word_df) #, pos_elements)
+        top_word_stats = [word for word, df in sorted(top_word_stats, key=lambda tup: tup[1], reverse=True)
+                          if df > int(len(corpus)/500)]
+        top_words.update(top_word_stats)
+        # top_words_pd = pd.DataFrame(top_word_stats, columns=['keyword', 'df', 'pos'])
+        # top_word_groups = [', '.join(similar_words) for similar_words in top_words_pd.groupby('pos')['keyword'].apply(list)]
+        # logger.info("Most important words [{}]:".format(name))
+        # for group in top_word_groups:
+        #     print(group)
+        # word2vec_plot([word for word in word_sets[0] if ' ' not in word])
 
+    # common_words = [word for word in word_sets[0] if word in word_sets[1]]
+    # logger.info("Common words:")
+    # print(common_words)
+    print(group_keywords_by_examples(top_words))
 
+def extract_keywords(corpus, mode='textrank', tfidf_topn=20):
+    data = []
+    if mode == 'textrank':
+        data = [keywords(' '.join(doc)).split('\n') for doc in corpus]
+    elif mode == 'tfidf':
+        dict = Dictionary(corpus)
+        corpus_bow = [dict.doc2bow(text) for text in corpus]
+        model = TfidfModel(corpus_bow, id2word=dict)  # fit model
+        corpus_tfidf = model[corpus_bow]
+        data = [[dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:tfidf_topn]]
+                      for doc_tfids in corpus_tfidf]
+    return data
+
+def calculate_word_embeddings():
+    sql = "select stem from pracujpl where stem is not null and lang='pl'"
+    vector_size = 200
+    engine = create_sqlite_engine()
+    corpus = engine.execute(sql).fetchall()
+    logger.info("Data read. Corpus size: {}".format(len(corpus)))
+    corpus = [txt[0].split() for txt in corpus]
+    corpus = applyPhrases(corpus)
+    logger.info("Phrases applied")
+    logger.info("Word2Vec rock'n'roll start!")
+    model = Word2Vec(corpus, size=vector_size, window=5, min_count=1, workers=6)
+    model.save("word2vec_all_200_5_fixed.model")
+    logger.info("Word2Vec saved")
+    word_vectors = model.wv
+    del model
+    # logger.info("Building global dictionary")
+    # corpus_dict = Dictionary(corpus)
+    # embeddings = []
+    # logger.info("Building word embedding dictionary")
+    # for word in corpus_dict.token2id.keys():
+    #     embeddings.append((word, word_vectors[word]))
+    # logger.info("Saving data to DB")
+    # embeddings_pd = pd.DataFrame(embeddings, columns=['word', 'vector_{}'.format(str(vector_size))])
+    # embeddings_pd.to_sql('doc2vec_{}'.format(str(vector_size)), con=engine, if_exists='replace', index_label='id')
+    logger.info("Word embeddings dict saved")
+
+def group_keywords_by_examples(top_words):
+    model = Word2Vec.load("word2vec_all_200_5_fixed.model")
+
+    similarity_threshold = 0.3
+    top_word_groups = {}
+    examples = {
+        'skills soft': [
+            'Pokrzepiający', 'Inspirator', 'Rozmowny', 'Dynamiczny', 'Przedsiębiorczy', 'Przekonujący', 'Zaradny', 'Pewny', 'Autorytatywny', 'Pewny_siebie', 'Niezależny', 'Zdecydowany', 'Działacz', 'Wytrwały', 'Lider', 'Produktywny ', 'Analityczny', 'Rozważny', 'Zorganizowany', 'Uporządkowany', 'Drobiazgowy', 'Kulturalny', 'Elastyczny', 'Opanowany', 'Powściągliwy', 'Cierpliwy', 'Życzliwy', 'Dyplomatyczny', 'Konsekwetny', 'Taktowny', 'Mediator', 'Tolerancyjny', 'Słuchacz', 'Zrównoważony', 'Asertywny', 'Samodzielny', 'Punktualny', 'Rozwiązywać_problemy', 'Efektywny', 'Odporny_na_stres'
+        ],
+        'skills_hard': [
+            'Jira', 'Agile', 'Scrum', 'PMP', 'wykształcenie_wyższe', 'zarządzanie_ryzykiem', 'risk_management', 'Power_Point', 'Excel', 'Word', 'BPMN', 'UML', 'Confluence', 'ITIL', 'Visio', 'PMI'
+        ],
+        'benefits': [
+
+        ]}
+    for group in examples.keys():
+        if group not in top_word_groups:
+            top_word_groups[group] = set()
+        for keyword in examples[group]:
+            try:
+                sims = model.wv.similar_by_word(keyword.lower(), topn=30)
+                sims = [sim[0] for sim in sims if sim[0] in top_words and sim[1] >= similarity_threshold]
+                if len(sims) > 0:
+                    top_word_groups[group].update(sims)
+            except KeyError:
+                pass
+    return top_word_groups
+
+def word2vec_plot(vocab):
+    model = Word2Vec.load("word2vec_all_200_5_fixed.model")
+    logger.info("Creating word2vec dict")
+    valid_vocab = []
+    for word in vocab:
+        try:
+            model[word]
+            valid_vocab.append(word)
+        except KeyError:
+            pass
+    X = model[valid_vocab]
+    logger.info("T-SNE start")
+    tsne = TSNE(n_components=2)
+    X_tsne = tsne.fit_transform(X)
+    logger.info("T-SNE done")
+    df = pd.DataFrame(X_tsne, index=valid_vocab, columns=['x', 'y'])
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1)
+
+    ax.scatter(df['x'], df['y'])
+    for word, pos in df.iterrows():
+        ax.annotate(word, pos)
+    plt.show()
 
 if __name__ == "__main__":
     # https://github.com/nikita-moor/morfeusz-wrapper
-    result = m.analyse("Jira")
     logger.info("START")
     # move_csv_to_db()
     # preprocess_corpus_and_find_phrases_and_stats()
     # extract_main_job_titles()
     # perform_topic_modelling()
     # pick_most_important_phrases_using_tfidf(topn=40)
-    detect_keywords_using_textrank_summarozation()
+
+
+    detect_keywords()
+    # calculate_word_embeddings()
+    # word2vec_testing()
     logger.info("DONE")
