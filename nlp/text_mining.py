@@ -466,7 +466,7 @@ def group_keywords_by_examples(top_words):
     examples = {
         'skills soft': [
             'Pokrzepiający', 'Inspirator', 'Rozmowny', 'Dynamiczny', 'Przedsiębiorczy', 'Przekonujący', 'Zaradny',
-            'Pewny', 'Autorytatywny', 'Pewny_siebie', 'Niezależny', 'Zdecydowany', 'Działacz', 'Wytrwały', 'Lider',
+            'Pewny', 'Autorytatywny', 'Pewny siebie', 'Niezależny', 'Zdecydowany', 'Działacz', 'Wytrwały', 'Lider',
             'Produktywny ', 'Analityczny', 'Rozważny', 'Zorganizowany', 'Uporządkowany', 'Drobiazgowy', 'Kulturalny',
             'Elastyczny', 'Opanowany', 'Powściągliwy', 'Cierpliwy', 'Życzliwy', 'Dyplomatyczny', 'Konsekwetny',
             'Taktowny', 'Mediator', 'Tolerancyjny', 'Słuchacz', 'Zrównoważony', 'Asertywny', 'Samodzielny',
@@ -474,12 +474,16 @@ def group_keywords_by_examples(top_words):
             'profesjonalny', 'komunikatywny', 'przemysłowy', 'odpowiedzialnosc', 'samodzielnosc', 'gotowość do praca',
             'dyspozycyjność', 'osiągać wynik', 'kreatywność', 'rzetelność', 'estetyczny wygląd', 'sumienność',
             'wytrwałość', 'aktywny', 'analityczny', 'pasja', 'inicjatywa', 'energia', 'przedsiębiorczy', 'zgrany',
-            'interpersonalny', 'systematyczny', 'zespołowy', 'pozytywny', 'zdeterminowany',
+            'interpersonalny', 'systematyczny', 'zespołowy', 'pozytywny', 'zdeterminowany', 'determinacja',
             'łatwość nawiązywać kontakt', 'silny motywacja', 'szybki uczenie się', 'podnoszenie swój kwalifikacja',
             'zarządzanie ryzyko', 'poczucie humor', 'samodyscyplina', 'dociekliwość', 'managerski', 'przywódczy',
             'charyzma', 'nadzorować', 'zaangażowanie', 'ścisły', 'humanistyczny', 'artystyczny', 'dbałość',
             'skrupulatność', 'uczciwość', 'podejmować decyzja', 'poszukiwać', 'odporność', 'otwartość', 'radzić soba',
-            'poczucie estetyka', 'negocjacje', 'operatywność', 'asertywność', 'lekkość', 'łatwość operować słowo'
+            'poczucie estetyka', 'negocjacje', 'operatywność', 'asertywność', 'lekkość', 'łatwość operować słowo',
+            'nadzór', 'podejmować decyzja', 'terminowość', 'potrafić ustalać priorytet', 'inicjować', 'szybki tempo',
+            'wielozadaniowy', 'szczery', 'konsekwencja', 'pod presja', 'wieloosobowy', 'sytuacja konfliktowy',
+            'etyczny', 'nienaganny prezencja', 'przebojowy', 'osoba otwarty ciekawy', 'prawidłowy artykulacja potrzeba',
+            'miły usposobienie', 'operatywność', 'zmysł plastyczny', 'systematyczność'
         ],
         'skills_hard': [
             'Jira', 'Agile', 'Scrum', 'PMP', 'wykształcenie',
@@ -498,7 +502,12 @@ def group_keywords_by_examples(top_words):
             'reklama', 'agencja reklamowy', 'ilustrator', 'illustrator', 'ilustracja', 'design', 'DTP', 'folder',
             'skład', 'dziennikarz', 'internet', 'programować', 'webowy', 'JavaScript', 'materiał marketingowy',
             'pisanie', 'media', 'redakcja', 'HTML', 'redagować tekst', 'treści', 'przewóz', 'miedzynarodowy',
-            'przewóz rzecz', 'przewóz ludzie', 'koordynować', 'prawo jazda'
+            'przewóz rzecz', 'przewóz ludzie', 'koordynować', 'prawo jazda', 'sprzedażowy', 'obsługa klient',
+            'zarzadzanie podległy', 'obsługa maszyna produkcyjny', 'budowa', 'znajomosc technologia', 'malowanie',
+            'czyszczenie', 'powłok lakierniczy utrzymanie', 'akwizycja', 'maszyna', 'usterka', 'lakierować',
+            'przemysłowy', 'dokonywać przegląd prewencyjny', 'tokarka frezarka szlifierka', 'przygotowywać',
+            'czystość stanowisko', 'naprawa', 'pranie brudny pieniądz', 'trenerski', 'budżetować', 'windykacja',
+            'coaching', 'konserwacja', 'kompozycja', 'rachunkowość', 'podatkowy', 'przepis', 'prawo', 'księgowanie faktura', 'rachunkowość'
         ],
         'benefits': [
             'benefit', 'innowacyjny', 'atrakcyjny wynagrodzenie', 'stabilny warunki', 'umowa praca',
@@ -506,7 +515,10 @@ def group_keywords_by_examples(top_words):
             'prywatny opieka medyczny', 'pakiet ms office', 'wyprawka', 'dofinansować', 'długoterminowy', 'długofalowy',
             'prowizyjny', 'bonusowy', 'rekreacyjny', 'system premiowy', 'premia uzależniony oda', 'miły atmosfera',
             'ubezpieczenie grupowy', 'samochód laptop telefon', 'częsty podróż służbowy', 'różny pora dzień', 'b2b',
-            'multisport', 'pakiet socjalny', 'pełny wymiar czas', 'częsty wyjazd', 'awans'
+            'multisport', 'pakiet socjalny', 'pełny wymiar czas', 'częsty wyjazd', 'awans', 'staż',
+            'aktualny badanie lekarski', 'niepełny wymiar', 'dzień wolny', 'kawa', 'ubezpieczenie grupowy',
+            'impreza integracyjny', 'paczka świąteczny', 'krótkoterminowy', 'członek rodzina bezpłatny',
+            'nieograniczony', 'gwarantować dyskrecja'
         ]}
     multi_word_top_words = [word for word in top_words if ' ' in word]
     for group in examples.keys():
@@ -553,7 +565,7 @@ def group_keywords_by_examples(top_words):
             if len(sims) > 0:
                 top_word_groups[group].update(sims)
     logger.info("Original set of top words:")
-    print(top_words)
+    logger.info(top_words)
     return top_word_groups
 
 
@@ -605,7 +617,7 @@ if __name__ == "__main__":
     # pick_most_important_phrases_using_tfidf(topn=40)
 
     detect_keywords(
-        explicit_sql="select ppl.stem_phrases from pracujpl ppl where offerData_jobTitle LIKE '%Przedstawiciel Handlowy%' and ppl.stem_phrases is not null",
+        explicit_sql="select ppl.stem_phrases from pracujpl ppl where lower(offerData_jobTitle) LIKE '%księgow%' and ppl.stem_phrases is not null",
         job_category='IT')
     # TODO: remove polish chars to catch: 'przywodczy'
     # TODO: examples categories ('All', 'IT', 'Business', 'Accounting', 'Physical', 'Salles', 'Marketing/Advertising', 'Design', 'Manager')
