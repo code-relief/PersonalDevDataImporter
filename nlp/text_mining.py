@@ -23,6 +23,9 @@ import pyLDAvis.gensim  # don't skip this
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.manifold import TSNE
+
+# !/usr/bin/env python -W ignore::DeprecationWarning
+
 # %matplotlib inline
 
 logger = logging.getLogger('text_mining')
@@ -132,8 +135,9 @@ def preprocess_corpus_and_find_phrases_and_stats(preprocess_content=True, desire
                     repl_size = len(error_phrase_replacements.keys())
                     stem = [extract_stem(m.analyse(word), m, error_phrase_replacements) for word in txt.split()]
                     if repl_size < len(error_phrase_replacements.keys()):
-                        txt = [word if word not in error_phrase_replacements else error_phrase_replacements[word] for word
-                             in txt.split()]
+                        txt = [word if word not in error_phrase_replacements else error_phrase_replacements[word] for
+                               word
+                               in txt.split()]
                         stem = [extract_stem(m.analyse(word), m, error_phrase_replacements) for word in txt]
                         txt = ' '.join(txt)
                     i += 1
@@ -178,6 +182,7 @@ def preprocess_corpus_and_find_phrases_and_stats(preprocess_content=True, desire
                               columns=['phrase', 'pos_element', 'pos_annotation', 'word_count', 'global_df'])
     phrases_pd.to_sql('pracujpl_phrases', con=engine, if_exists='replace', index_label='id')
 
+
 def detect_and_save_phrases():
     engine = create_sqlite_engine()
     data = engine.execute(
@@ -193,6 +198,7 @@ def detect_and_save_phrases():
     update_data = zip(ids, phrases)
     for id, phrase in update_data:
         engine.execute("UPDATE pracujpl SET stem_phrases='{0}' where id={1}".format(' '.join(phrase), str(id)))
+
 
 def extract_main_job_titles():
     engine = create_sqlite_engine()
@@ -352,13 +358,17 @@ def pick_most_important_phrases_using_tfidf(topn=10):
     # print([dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:topn]])
 
 
-def detect_keywords():
+def detect_keywords(explicit_sql=None, job_category='All'):
     sql_programming = "select ppl.stem_phrases from pracujpl ppl inner join job_titles jt on jt.pos_annotation='nazwa języka programowania' and ppl.offerData_jobTitle LIKE '%'||jt.job_title||'%' where ppl.stem_phrases is not null"
     sql_salles = "select ppl.stem_phrases from pracujpl ppl where offerData_jobTitle LIKE '%sprzedawca%' and ppl.stem_phrases is not null"
     sql_sales_representative = "select ppl.stem_phrases from pracujpl ppl where (offerData_jobTitle like '%handlowy%' or offerData_jobTitle like '%handlowiec%') and ppl.stem_phrases is not null"
     sql_drivers = "select ppl.stem_phrases from pracujpl ppl where offerData_jobTitle LIKE '%kierowca międzynarodowy%' and ppl.stem_phrases is not null"
     engine = create_sqlite_engine()
-    corpus = engine.execute(sql_sales_representative).fetchall()
+    sql = sql_programming
+    if explicit_sql is not None:
+        sql = explicit_sql
+    logger.info(sql)
+    corpus = engine.execute(sql).fetchall()
     logger.info("Data read. Corpus size: {}".format(len(corpus)))
     corpus = [txt[0].split() for txt in corpus]
     stopwords = get_stopwords()
@@ -389,9 +399,9 @@ def detect_keywords():
         # pos_data = [extract_pos(word.split()) for word in top_words_set]
         # pos_elements, pos_annotations = zip(*pos_data)
 
-        top_word_stats = zip(top_words_set, top_word_df) #, pos_elements)
+        top_word_stats = zip(top_words_set, top_word_df)  # , pos_elements)
         top_word_stats = [word for word, df in sorted(top_word_stats, key=lambda tup: tup[1], reverse=True)
-                          if df > int(len(corpus)/500)]
+                          if df >= int(len(corpus) / 100)]  # 300 - 350
         top_words.update(top_word_stats)
         # top_words_pd = pd.DataFrame(top_word_stats, columns=['keyword', 'df', 'pos'])
         # top_word_groups = [', '.join(similar_words) for similar_words in top_words_pd.groupby('pos')['keyword'].apply(list)]
@@ -405,6 +415,7 @@ def detect_keywords():
     # print(common_words)
     print(group_keywords_by_examples(top_words))
 
+
 def extract_keywords(corpus, mode='textrank', tfidf_topn=20):
     data = []
     if mode == 'textrank':
@@ -414,9 +425,11 @@ def extract_keywords(corpus, mode='textrank', tfidf_topn=20):
         corpus_bow = [dict.doc2bow(text) for text in corpus]
         model = TfidfModel(corpus_bow, id2word=dict)  # fit model
         corpus_tfidf = model[corpus_bow]
-        data = [[dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:tfidf_topn]]
-                      for doc_tfids in corpus_tfidf]
+        data = [
+            [dict[word] for word, tfids_score in sorted(doc_tfids, key=lambda tup: tup[1], reverse=True)[:tfidf_topn]]
+            for doc_tfids in corpus_tfidf]
     return data
+
 
 def calculate_word_embeddings():
     sql = "select stem from pracujpl where stem is not null and lang='pl'"
@@ -444,33 +457,105 @@ def calculate_word_embeddings():
     # embeddings_pd.to_sql('doc2vec_{}'.format(str(vector_size)), con=engine, if_exists='replace', index_label='id')
     logger.info("Word embeddings dict saved")
 
+
 def group_keywords_by_examples(top_words):
     model = Word2Vec.load("word2vec_all_200_5_fixed.model")
 
-    similarity_threshold = 0.3
+    similarity_threshold = 0.40
     top_word_groups = {}
     examples = {
         'skills soft': [
-            'Pokrzepiający', 'Inspirator', 'Rozmowny', 'Dynamiczny', 'Przedsiębiorczy', 'Przekonujący', 'Zaradny', 'Pewny', 'Autorytatywny', 'Pewny_siebie', 'Niezależny', 'Zdecydowany', 'Działacz', 'Wytrwały', 'Lider', 'Produktywny ', 'Analityczny', 'Rozważny', 'Zorganizowany', 'Uporządkowany', 'Drobiazgowy', 'Kulturalny', 'Elastyczny', 'Opanowany', 'Powściągliwy', 'Cierpliwy', 'Życzliwy', 'Dyplomatyczny', 'Konsekwetny', 'Taktowny', 'Mediator', 'Tolerancyjny', 'Słuchacz', 'Zrównoważony', 'Asertywny', 'Samodzielny', 'Punktualny', 'Rozwiązywać_problemy', 'Efektywny', 'Odporny_na_stres'
+            'Pokrzepiający', 'Inspirator', 'Rozmowny', 'Dynamiczny', 'Przedsiębiorczy', 'Przekonujący', 'Zaradny',
+            'Pewny', 'Autorytatywny', 'Pewny_siebie', 'Niezależny', 'Zdecydowany', 'Działacz', 'Wytrwały', 'Lider',
+            'Produktywny ', 'Analityczny', 'Rozważny', 'Zorganizowany', 'Uporządkowany', 'Drobiazgowy', 'Kulturalny',
+            'Elastyczny', 'Opanowany', 'Powściągliwy', 'Cierpliwy', 'Życzliwy', 'Dyplomatyczny', 'Konsekwetny',
+            'Taktowny', 'Mediator', 'Tolerancyjny', 'Słuchacz', 'Zrównoważony', 'Asertywny', 'Samodzielny',
+            'Punktualny', 'Rozwiązywać problem', 'Efektywny', 'Odporny_na_stres', 'odpowiedzialny', 'samodzielny',
+            'profesjonalny', 'komunikatywny', 'przemysłowy', 'odpowiedzialnosc', 'samodzielnosc', 'gotowość do praca',
+            'dyspozycyjność', 'osiągać wynik', 'kreatywność', 'rzetelność', 'estetyczny wygląd', 'sumienność',
+            'wytrwałość', 'aktywny', 'analityczny', 'pasja', 'inicjatywa', 'energia', 'przedsiębiorczy', 'zgrany',
+            'interpersonalny', 'systematyczny', 'zespołowy', 'pozytywny', 'zdeterminowany',
+            'łatwość nawiązywać kontakt', 'silny motywacja', 'szybki uczenie się', 'podnoszenie swój kwalifikacja',
+            'zarządzanie ryzyko', 'poczucie humor', 'samodyscyplina', 'dociekliwość', 'managerski', 'przywódczy',
+            'charyzma', 'nadzorować', 'zaangażowanie', 'ścisły', 'humanistyczny', 'artystyczny', 'dbałość',
+            'skrupulatność', 'uczciwość', 'podejmować decyzja', 'poszukiwać', 'odporność', 'otwartość', 'radzić soba',
+            'poczucie estetyka', 'negocjacje', 'operatywność', 'asertywność', 'lekkość', 'łatwość operować słowo'
         ],
         'skills_hard': [
-            'Jira', 'Agile', 'Scrum', 'PMP', 'wykształcenie_wyższe', 'zarządzanie_ryzykiem', 'risk_management', 'Power_Point', 'Excel', 'Word', 'BPMN', 'UML', 'Confluence', 'ITIL', 'Visio', 'PMI'
+            'Jira', 'Agile', 'Scrum', 'PMP', 'wykształcenie',
+            'Power_Point', 'Excel', 'Word', 'BPMN', 'UML', 'Confluence', 'ITIL', 'Visio', 'PMI', 'marketing', 'audyt',
+            'techniczny', 'informatyczny', 'angielski', 'niemiecki', 'elektryczny', 'produktowy', 'telefoniczny',
+            'kadrowy', 'telekomunikacyjny', 'kredytowy', 'detaliczny', 'ekonomiczny', 'prawo_jazda_kat_bit',
+            'rachunkowość', 'właściwy sposób ekspozycja towar', 'znajomość rynek', 'znajomość pakiet',
+            'wykształcenie wysoki', 'kilkuletni', 'prawniczy', 'urzędniczy', 'administracyny', 'budowlany', 'finansowy',
+            'farmaceutyczny', 'sprzedażowy', 'medyczny', 'bankowy', 'telefoniczny', 'elektryczny', 'biegły',
+            'telekomunikacyjny', 'ubezpieczeniowy', 'logistyczny', 'kredytowy', 'transportowy', 'biurowy', 'kadrowy',
+            'elektroniczny', 'wdrożeniowy', 'sieciowy', 'serwisowy', 'chemiczny', 'elektrotechniczny',
+            'kosmetyczny', 'menedżerski', 'kurierski', 'niemieckojęzyczny', 'graficzny', 'windykacyjny', 'materiałowy',
+            'konstrukcyjny', 'hydrauliczny', 'meblowy', 'statystyczny', 'poligraficzny', 'minimum letni', 'metodyka',
+            'scrum', 'kanban', 'autocad', 'udokumentować', 'projektować', 'projekt graficzny', 'Photoshop',
+            'corel draw', 'ulotka', 'montaż', 'poligraficzny', 'adobe', 'fotografia', 'power point', 'ms office',
+            'reklama', 'agencja reklamowy', 'ilustrator', 'illustrator', 'ilustracja', 'design', 'DTP', 'folder',
+            'skład', 'dziennikarz', 'internet', 'programować', 'webowy', 'JavaScript', 'materiał marketingowy',
+            'pisanie', 'media', 'redakcja', 'HTML', 'redagować tekst', 'treści', 'przewóz', 'miedzynarodowy',
+            'przewóz rzecz', 'przewóz ludzie', 'koordynować', 'prawo jazda'
         ],
         'benefits': [
-
+            'benefit', 'innowacyjny', 'atrakcyjny wynagrodzenie', 'stabilny warunki', 'umowa praca',
+            'samochód służbowy', 'dofinansować', 'własny działalność gospodarczy', 'własny działalność gospodarczy',
+            'prywatny opieka medyczny', 'pakiet ms office', 'wyprawka', 'dofinansować', 'długoterminowy', 'długofalowy',
+            'prowizyjny', 'bonusowy', 'rekreacyjny', 'system premiowy', 'premia uzależniony oda', 'miły atmosfera',
+            'ubezpieczenie grupowy', 'samochód laptop telefon', 'częsty podróż służbowy', 'różny pora dzień', 'b2b',
+            'multisport', 'pakiet socjalny', 'pełny wymiar czas', 'częsty wyjazd', 'awans'
         ]}
+    multi_word_top_words = [word for word in top_words if ' ' in word]
     for group in examples.keys():
         if group not in top_word_groups:
             top_word_groups[group] = set()
         for keyword in examples[group]:
-            try:
-                sims = model.wv.similar_by_word(keyword.lower(), topn=30)
-                sims = [sim[0] for sim in sims if sim[0] in top_words and sim[1] >= similarity_threshold]
-                if len(sims) > 0:
-                    top_word_groups[group].update(sims)
-            except KeyError:
-                pass
+            keyword = keyword.lower()
+            sims = []
+            keyword_vector = None
+            if ' ' in keyword:
+                try:
+                    keyword_vector = sum(model[keyword.split()])
+                    sims = model.similar_by_vector(keyword_vector, topn=30)
+                    print("Multiword example case:")
+                    print(keyword)
+                    print(sims)
+                except KeyError:
+                    logger.warning("Worn in example phrase: '{}' not in dictionary!!!".format(keyword))
+                    continue
+            else:
+                try:
+                    keyword_vector = model[keyword]
+                    sims = model.wv.similar_by_word(keyword, topn=30)
+                except KeyError:
+                    logger.warning("'{}' not in dictionary!!!".format(keyword))
+                    continue
+            multiword_sims = []
+            if len(multi_word_top_words) > 0 and keyword_vector is not None:
+                for phrase in multi_word_top_words:
+                    try:
+                        if cosine(keyword_vector, sum(model[phrase.split()])) >= similarity_threshold:
+                            multiword_sims.append(phrase)
+                    except KeyError:
+                        logger.warning("Word in phrase '{}' not in dictionary!!!".format(phrase))
+                        continue
+                if len(multiword_sims) > 0:
+                    print("Multiword keywords case:")
+                    print(keyword)
+                    print(multiword_sims)
+            sims = [sim[0] for sim in sims if sim[0] in top_words and sim[1] >= similarity_threshold]
+            sims.extend(multiword_sims)
+            if keyword in top_words:
+                sims.append(keyword)
+            if len(sims) > 0:
+                top_word_groups[group].update(sims)
+    logger.info("Original set of top words:")
+    print(top_words)
     return top_word_groups
+
 
 def word2vec_plot(vocab):
     model = Word2Vec.load("word2vec_all_200_5_fixed.model")
@@ -496,17 +581,35 @@ def word2vec_plot(vocab):
         ax.annotate(word, pos)
     plt.show()
 
+
+def cosine(vec1, vec2):
+    return np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+
+
 if __name__ == "__main__":
     # https://github.com/nikita-moor/morfeusz-wrapper
     logger.info("START")
+
+    # model = Word2Vec.load("word2vec_all_200_5_fixed.model")
+    # keyword = 'gotowość do praca'
+    # sentence_vector_1 = sum(model[keyword.split()])
+    # keyword = 'gotować'
+    # sentence_vector_2 = sum(model[keyword.split()])
+    # print(cosine(sentence_vector_1, sentence_vector_2))
+
+    # print(model.similar_by_vector(sentence_vector_1, topn=30))
     # move_csv_to_db()
     # preprocess_corpus_and_find_phrases_and_stats()
     # extract_main_job_titles()
     # perform_topic_modelling()
     # pick_most_important_phrases_using_tfidf(topn=40)
 
+    detect_keywords(
+        explicit_sql="select ppl.stem_phrases from pracujpl ppl where offerData_jobTitle LIKE '%Przedstawiciel Handlowy%' and ppl.stem_phrases is not null",
+        job_category='IT')
+    # TODO: remove polish chars to catch: 'przywodczy'
+    # TODO: examples categories ('All', 'IT', 'Business', 'Accounting', 'Physical', 'Salles', 'Marketing/Advertising', 'Design', 'Manager')
 
-    detect_keywords()
     # calculate_word_embeddings()
     # word2vec_testing()
     logger.info("DONE")
