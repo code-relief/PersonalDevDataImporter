@@ -483,7 +483,7 @@ def group_keywords_by_examples(top_words):
             'nadzór', 'podejmować decyzja', 'terminowość', 'potrafić ustalać priorytet', 'inicjować', 'szybki tempo',
             'wielozadaniowy', 'szczery', 'konsekwencja', 'pod presja', 'wieloosobowy', 'sytuacja konfliktowy',
             'etyczny', 'nienaganny prezencja', 'przebojowy', 'osoba otwarty ciekawy', 'prawidłowy artykulacja potrzeba',
-            'miły usposobienie', 'operatywność', 'zmysł plastyczny', 'systematyczność'
+            'miły usposobienie', 'operatywność', 'zmysł plastyczny', 'systematyczność', 'kierować', 'jakość', 'skuteczność'
         ],
         'skills_hard': [
             'Jira', 'Agile', 'Scrum', 'PMP', 'wykształcenie',
@@ -507,7 +507,9 @@ def group_keywords_by_examples(top_words):
             'czyszczenie', 'powłok lakierniczy utrzymanie', 'akwizycja', 'maszyna', 'usterka', 'lakierować',
             'przemysłowy', 'dokonywać przegląd prewencyjny', 'tokarka frezarka szlifierka', 'przygotowywać',
             'czystość stanowisko', 'naprawa', 'pranie brudny pieniądz', 'trenerski', 'budżetować', 'windykacja',
-            'coaching', 'konserwacja', 'kompozycja', 'rachunkowość', 'podatkowy', 'przepis', 'prawo', 'księgowanie faktura', 'rachunkowość'
+            'coaching', 'konserwacja', 'kompozycja', 'rachunkowość', 'podatkowy', 'przepis', 'prawo',
+            'księgowanie faktura', 'rachunkowość', 'montaż rusztowanie', 'uprawnienia monter', 'obiekt przemysłowy',
+            'kontrola', 'naprawa', 'opiniować', 'wykształcenie wysoki', 'reprezentować', 'wdrażać', 'sieć', 'produkcyjny', 'wymaganie', 'wiedza'
         ],
         'benefits': [
             'benefit', 'innowacyjny', 'atrakcyjny wynagrodzenie', 'stabilny warunki', 'umowa praca',
@@ -518,7 +520,8 @@ def group_keywords_by_examples(top_words):
             'multisport', 'pakiet socjalny', 'pełny wymiar czas', 'częsty wyjazd', 'awans', 'staż',
             'aktualny badanie lekarski', 'niepełny wymiar', 'dzień wolny', 'kawa', 'ubezpieczenie grupowy',
             'impreza integracyjny', 'paczka świąteczny', 'krótkoterminowy', 'członek rodzina bezpłatny',
-            'nieograniczony', 'gwarantować dyskrecja'
+            'nieograniczony', 'gwarantować dyskrecja', 'zakwaterowanie', 'stanowisko odpowiedzialny', 'spółka zarząd',
+            'kancelaria', 'studia', 'szkolenie', 'negocjować'
         ]}
     multi_word_top_words = [word for word in top_words if ' ' in word]
     for group in examples.keys():
@@ -617,7 +620,7 @@ if __name__ == "__main__":
     # pick_most_important_phrases_using_tfidf(topn=40)
 
     detect_keywords(
-        explicit_sql="select ppl.stem_phrases from pracujpl ppl where lower(offerData_jobTitle) LIKE '%księgow%' and ppl.stem_phrases is not null",
+        explicit_sql="select ppl.stem_phrases from pracujpl ppl where (lower(offerData_jobTitle) LIKE '%senior%' and lower(offerData_jobTitle) LIKE '%developer%') and ppl.stem_phrases is not null",
         job_category='IT')
     # TODO: remove polish chars to catch: 'przywodczy'
     # TODO: examples categories ('All', 'IT', 'Business', 'Accounting', 'Physical', 'Salles', 'Marketing/Advertising', 'Design', 'Manager')
