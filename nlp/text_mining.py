@@ -370,6 +370,7 @@ def detect_keywords(explicit_sql=None, job_category='All'):
     logger.info(sql)
     corpus = engine.execute(sql).fetchall()
     logger.info("Data read. Corpus size: {}".format(len(corpus)))
+    corpus_raw = [txt[0] for txt in corpus]
     corpus = [txt[0].split() for txt in corpus]
     stopwords = get_stopwords()
     corpus = [[word for word in doc if word not in stopwords] for doc in corpus]
@@ -382,9 +383,12 @@ def detect_keywords(explicit_sql=None, job_category='All'):
     word_sets = []
     top_words = set()
 
+    textrank_dict = None
     for keyword_data, name in [(keyword_data_textrank, 'TextRank'), (keyword_data_tfidf, 'TFiDF')]:
         logger.info("Calculating stats [{}]".format(name))
         keyword_data_dict = Dictionary(keyword_data)
+        if 'TextRank' == name:
+            textrank_dict = keyword_data_dict
         top_words_set = list(set([top_word for doc_top in keyword_data for top_word in doc_top]))
         if len(word_sets) > 0:
             logger.info("Removing duplicates [{}]".format(name))
@@ -401,7 +405,7 @@ def detect_keywords(explicit_sql=None, job_category='All'):
 
         top_word_stats = zip(top_words_set, top_word_df)  # , pos_elements)
         top_word_stats = [word for word, df in sorted(top_word_stats, key=lambda tup: tup[1], reverse=True)
-                          if df >= int(len(corpus) / 100)]  # 300 - 350
+                          if df >= int(len(corpus) / 300)]  # 300 - 350
         top_words.update(top_word_stats)
         # top_words_pd = pd.DataFrame(top_word_stats, columns=['keyword', 'df', 'pos'])
         # top_word_groups = [', '.join(similar_words) for similar_words in top_words_pd.groupby('pos')['keyword'].apply(list)]
@@ -413,7 +417,29 @@ def detect_keywords(explicit_sql=None, job_category='All'):
     # common_words = [word for word in word_sets[0] if word in word_sets[1]]
     # logger.info("Common words:")
     # print(common_words)
-    print(group_keywords_by_examples(top_words))
+    corpus_size = len(corpus)
+    result = group_keywords_by_examples(top_words)
+    print(sql)
+    print("Documents: {}".format(corpus_size))
+    for group in result.keys():
+        phrases = result[group]
+        dfs = []
+        for s in phrases:
+            df1 = 0
+            df2 = 0
+            try:
+                df1 = textrank_dict.dfs[textrank_dict.token2id[s]]
+            except KeyError:
+                pass
+            try:
+                df2 = keyword_data_dict.dfs[keyword_data_dict.token2id[s]]
+            except KeyError:
+                pass
+            dfs.append(max((df1, df2)))
+        percentage = [str(round(df*100/corpus_size, 1)) + '%' for df in dfs]
+        print(group)
+        print(sorted(list(zip(phrases, dfs, percentage)), key=lambda x:x[1], reverse=True))
+    # print(result)
 
 
 def extract_keywords(corpus, mode='textrank', tfidf_topn=20):
